@@ -1,6 +1,6 @@
 import sys
 
-PRJ_DIR = '/cluster/mshen/prj/.../'  
+PRJ_DIR = '/cluster/mshen/prj/deepmera_design/'
 SRC_DIR = PRJ_DIR + 'src/'
 
 # toy = True
@@ -19,7 +19,7 @@ RESULTS_PLACE = PRJ_DIR + 'results/'
 CLEAN = False       # Values = 'ask', True, False
 
 # which data are we using? import that data's parameters
-DATA_FOLD = '2016-06-30/'
+DATA_FOLD = '2016-11-07/'
 
 sys.path.insert(0, DATA_DIR + DATA_FOLD)
 import _dataconfig as d
