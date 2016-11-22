@@ -134,6 +134,54 @@ def three_comb_muts(seq, reps = 1):
   print '\tCreated', len(seqs), 'seqs from three-comb with', reps, 'replicates'
   return nms, seqs
 
+def light_mutation(seq, nm, start, end):
+  # Used for GFPpos controls
+  # Transition mutation on nucleotides are probably least harmful (W -> W / S -> S)
+  mapper = {'A': 'T', 'G': 'C', 'C': 'G', 'T': 'A'}
+  s = ''
+  cands = []
+  for j in range(_config.d.NUM_GFPPOS_CTRL_MUTATIONS):
+    ok = False
+    while not ok:
+      ok = True
+      c = random.choice(range(start, end))
+      for gene in _config.d.MOTIF[nm]:
+        if gene[0] <= c <= gene[1]:
+          ok = False
+    cands.append(c)
+
+  for i in range(len(seq)):
+    if i not in cands:
+      s += seq[i]
+    else:
+      s += mapper[seq[i]]
+  return s
+
+def controls(seq, nm, start, end, reps = 1):
+  nms, seqs = [], []
+
+  for i in range(reps):
+    motif = _config.d.MOTIF[nm][ (i+1) % len(_config.d.MOTIF[nm]) ]
+    if motif[0] < start or motif[1] > end:
+      print '\tMotif', motif, 'out of range!'
+      # sys.exit(0)
+
+    g = seq[motif[0] - start : motif[1] - start]
+    dg = destroy_dna(g)
+    news = seq[ : motif[0] - start] + dg + seq[ motif[1] - start : ]
+    seqs.append(news)
+    nms.append('GFPneg_control_' + str(i))
+
+    seqs.append(light_mutation(seq, nm, start, end))
+    nms.append('GFPpos_control_' + str(i))
+
+  for s in seqs:
+    if len(s) != _config.d.RANDOM_LEN:
+      print 'ERROR:', s, len(s)
+      break
+  print '\tCreated', len(seqs), 'control seqs (half positive, half negatve) with', reps, 'replicates'
+  return nms, seqs
+
 def ensure_crispr_untargetable(all_seqs, nm, start, end, seq):
   # Sufficient criteria for untargetability:
   #   - At least 1 mutation in PAM
@@ -180,6 +228,18 @@ def ensure_crispr_untargetable(all_seqs, nm, start, end, seq):
   print '\tEdited', edited, 'sequences'
   return newallseqs
 
+def add_homology_arms(all_seqs, chro, start, end):
+  newseqs = []
+  front = subprocess.check_output(TOOL + ' ' + TOOL_DB + ' -noMask stdout -seq=' + chro + ' -start=' + str(start - _config.d.HOMOLOGY_ARM_LEN) + ' -end=' + str(start), shell = True)
+  front = ''.join(front.split('\n')[1:])
+  after = subprocess.check_output(TOOL + ' ' + TOOL_DB + ' -noMask stdout -seq=' + chro + ' -start=' + str(end) + ' -end=' + str(end + _config.d.HOMOLOGY_ARM_LEN), shell = True)
+  after = ''.join(after.split('\n')[1:])
+  for s in all_seqs:
+    newseqs.append( front + s + after )
+  return newseqs
+
+
+
 def make_library(out_dir):
   for _i in range(len(_config.d.NAMES)):
     nm, chro, pos = _config.d.NAMES[_i], _config.d.CHRMS[_i], _config.d.POSS[_i]
@@ -191,8 +251,12 @@ def make_library(out_dir):
 
     seq = get_genomic_seq(chro, start, end)
     print nm, '|', start, '-', end, '| Length:', end - start, '\n', seq
-
     all_names, all_seqs = [], []
+
+    nms, seqs = controls(seq, nm, start, end, reps = 17)
+    all_names += nms
+    all_seqs += seqs
+
     nms, seqs = one_muts(seq, reps = 3)
     all_names += nms
     all_seqs += seqs
@@ -215,6 +279,8 @@ def make_library(out_dir):
 
     all_seqs = ensure_crispr_untargetable(all_seqs, nm, start, end, seq)
     all_seqs = ensure_crispr_untargetable(all_seqs, nm, start, end, seq)
+
+    all_seqs = add_homology_arms(all_seqs, chro, start, end)
 
     print '\t', len(all_names), len(nms)
 
