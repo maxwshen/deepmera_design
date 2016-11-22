@@ -21,25 +21,28 @@ def get_genomic_seq(chro, start, end):
   ans = ''.join(ans.split('\n')[1:])
   return ans.strip()
 
-def one_muts(seq):
+def one_muts(seq, reps = 1):
   nms, seqs = [], []
   ctr = 0
-  for i in range(len(seq)):
-    for j in ['A', 'C', 'G', 'T']:
-      if seq[i] != j:
-        seqs.append(seq[:i] + j + seq[i+1:])
-        nms.append('single_' + str(ctr))
-        ctr += 1
-  for s in seqs:
-    if len(s) != _config.d.RANDOM_LEN:
-      print 'ERROR:', s, len(s)
-      break
+  for rep in range(reps):
+    for i in range(len(seq)):
+      for j in ['A', 'C', 'G', 'T']:
+        if seq[i] != j:
+          seqs.append(seq[:i] + j + seq[i+1:])
+          nms.append('single_' + str(ctr))
+          ctr += 1
+    for s in seqs:
+      if len(s) != _config.d.RANDOM_LEN:
+        print 'ERROR:', s, len(s)
+        break
+  print '\tCreated', len(seqs), 'seqs from 1-mutations with', reps, 'replicates'
   return nms, seqs
 
 def two_muts(seq):
   nms, seqs = [], []
   ctr = 0
-  for i in range(len(seq)):
+  START, END = 1, len(seq)
+  for i in range(START, END):
     for j in range(i + 1, len(seq)):
       for k in ['A', 'C', 'G', 'T']:
         if seq[i] != k:
@@ -52,6 +55,7 @@ def two_muts(seq):
     if len(s) != _config.d.RANDOM_LEN:
       print 'ERROR:', s, len(s)
       break
+  print '\tCreated', len(seqs), 'seqs from all pairs for', END - START, 'nt'
   return nms, seqs
 
 def destroy_dna(seq):
@@ -66,12 +70,11 @@ def destroy_dna(seq):
         break
   return new
 
-def four_window_muts(seq):
-  num_replicates = 5
+def four_window_muts(seq, reps = 1):
   nms, seqs = [], []
   ctr = 0
   for i in range(0, len(seq)-4, 2):
-    for rep in range(num_replicates):
+    for rep in range(reps):
       mut = destroy_dna(seq[i:i+4])
       seqs.append(seq[:i] + mut + seq[i+4:])
       nms.append('four_window_' + str(ctr))
@@ -80,15 +83,15 @@ def four_window_muts(seq):
     if len(s) != _config.d.RANDOM_LEN:
       print 'ERROR:', s, len(s)
       break
+  print '\tCreated', len(seqs), 'seqs from 4bp muts with', reps, 'replicates'
   return nms, seqs
 
-def pairs_four_window_muts(seq):
-  num_replicates = 4
+def pairs_four_window_muts(seq, reps = 1):
   nms, seqs = [], []
   ctr = 0
   for i in range(0, len(seq)-4, 2):
     for j in range(i + 4, len(seq)-4, 2):
-      for rep in range(num_replicates):
+      for rep in range(reps):
         mut = destroy_dna(seq[i:i+4])
         mut2 = destroy_dna(seq[j:j+4])
         seqs.append(seq[:i] + mut + seq[i+4:j] + mut2 + seq[j+4:])
@@ -98,6 +101,7 @@ def pairs_four_window_muts(seq):
     if len(s) != _config.d.RANDOM_LEN:
       print 'ERROR:', s, len(s)
       break
+  print '\tCreated', len(seqs), 'seqs from pairs of 4bp muts with', reps, 'replicates'
   return nms, seqs
 
 def comb_dna(seq):
@@ -114,12 +118,11 @@ def comb_dna(seq):
       new += seq[i]
   return new
 
-def three_comb_muts(seq):
-  num_replicates = 5
+def three_comb_muts(seq, reps = 1):
   nms, seqs = [], []
   ctr = 0
   for i in range(0, len(seq)-5):
-    for rep in range(num_replicates):
+    for rep in range(reps):
       mut = comb_dna(seq[i:i+5])
       seqs.append(seq[:i] + mut + seq[i+5:])
       nms.append('three_comb_' + str(ctr))
@@ -128,6 +131,7 @@ def three_comb_muts(seq):
     if len(s) != _config.d.RANDOM_LEN:
       print 'ERROR:', s, len(s)
       break
+  print '\tCreated', len(seqs), 'seqs from three-comb with', reps, 'replicates'
   return nms, seqs
 
 def ensure_crispr_untargetable(all_seqs, nm, start, end, seq):
@@ -147,9 +151,9 @@ def ensure_crispr_untargetable(all_seqs, nm, start, end, seq):
     
     # positive orientation
     if PAM[1] == '+':
-      if sum(ms[pos - 10 : pos + 3]) > 0:
+      if sum(ms[pos - 10 : pos + 3]) >= 1:
         pass
-      elif sum(ms[pos - 20 : pos - 10]) > 1:
+      elif sum(ms[pos - 20 : pos - 10]) >= 3:
         pass
       else:
         edit = random.choice([1, 2])
@@ -160,9 +164,9 @@ def ensure_crispr_untargetable(all_seqs, nm, start, end, seq):
 
     # reverse orientation
     if PAM[1] == '-':
-      if sum(ms[pos + 0 : pos + 13]) > 0:
+      if sum(ms[pos + 0 : pos + 13]) >= 1:
         pass
-      elif sum(ms[pos + 13 : pos + 23]) > 1:
+      elif sum(ms[pos + 13 : pos + 23]) >= 3:
         pass
       else:
         edit = random.choice([0, 1])
@@ -186,10 +190,10 @@ def make_library(out_dir):
       start -= 1
 
     seq = get_genomic_seq(chro, start, end)
-    print nm, start, end, end - start, seq
+    print nm, '|', start, '-', end, '| Length:', end - start, '\n', seq
 
     all_names, all_seqs = [], []
-    nms, seqs = one_muts(seq)
+    nms, seqs = one_muts(seq, reps = 3)
     all_names += nms
     all_seqs += seqs
 
@@ -197,15 +201,15 @@ def make_library(out_dir):
     all_names += nms
     all_seqs += seqs
 
-    nms, seqs = four_window_muts(seq)
+    nms, seqs = four_window_muts(seq, reps = 5)
     all_names += nms
     all_seqs += seqs
 
-    nms, seqs = pairs_four_window_muts(seq)
+    nms, seqs = pairs_four_window_muts(seq, reps = 5)
     all_names += nms
     all_seqs += seqs
 
-    nms, seqs = three_comb_muts(seq)
+    nms, seqs = three_comb_muts(seq, reps = 6)
     all_names += nms
     all_seqs += seqs
 
