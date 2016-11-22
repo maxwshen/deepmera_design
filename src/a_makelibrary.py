@@ -130,9 +130,55 @@ def three_comb_muts(seq):
       break
   return nms, seqs
 
+def ensure_crispr_untargetable(all_seqs, nm, start, end, seq):
+  # Sufficient criteria for untargetability:
+  #   - At least 1 mutation in PAM
+  #   - At least 1 mutation in 10bp next to PAM
+  #   - At least 2 mutations in 10bp in gRNA distal from PAM
+  PAM = _config.d.PAMS[_config.d.NAMES.index(nm)]
+  pos = PAM[0] - start
+  if PAM[0] + 2 > end or PAM[0] < start:
+    print '\tPAM location', PAM, 'is not fully within designed region', start, end
+    sys.exit(0)
+  edited = 0
+  newallseqs = []
+  for s in all_seqs:
+    ms = [1 if s[i] != seq[i] else 0 for i in range(len(seq))]
+    
+    # positive orientation
+    if PAM[1] == '+':
+      if sum(ms[pos - 10 : pos + 3]) > 0:
+        pass
+      elif sum(ms[pos - 20 : pos - 10]) > 1:
+        pass
+      else:
+        edit = random.choice([1, 2])
+        temp_s = list(s)
+        temp_s[pos + edit] = random.choice(['A', 'C', 'T'])
+        s = ''.join(temp_s)
+        edited += 1
+
+    # reverse orientation
+    if PAM[1] == '-':
+      if sum(ms[pos + 0 : pos + 13]) > 0:
+        pass
+      elif sum(ms[pos + 13 : pos + 23]) > 1:
+        pass
+      else:
+        edit = random.choice([0, 1])
+        temp_s = list(s)
+        temp_s[pos + edit] = random.choice(['A', 'G', 'T'])
+        s = ''.join(temp_s)
+        edited += 1
+
+    newallseqs.append(s)
+
+  print '\tEdited', edited, 'sequences'
+  return newallseqs
+
 def make_library(out_dir):
-  for i in range(len(_config.d.NAMES)):
-    nm, chro, pos = _config.d.NAMES[i], _config.d.CHRMS[i], _config.d.POSS[i]
+  for _i in range(len(_config.d.NAMES)):
+    nm, chro, pos = _config.d.NAMES[_i], _config.d.CHRMS[_i], _config.d.POSS[_i]
 
     start = pos - _config.d.RANDOM_LEN / 2
     end = pos + _config.d.RANDOM_LEN / 2
@@ -140,6 +186,7 @@ def make_library(out_dir):
       start -= 1
 
     seq = get_genomic_seq(chro, start, end)
+    print nm, start, end, end - start, seq
 
     all_names, all_seqs = [], []
     nms, seqs = one_muts(seq)
@@ -162,19 +209,22 @@ def make_library(out_dir):
     all_names += nms
     all_seqs += seqs
 
-    print nm, start, end, end - start, seq
-    print len(all_names), len(nms)
+    all_seqs = ensure_crispr_untargetable(all_seqs, nm, start, end, seq)
+    all_seqs = ensure_crispr_untargetable(all_seqs, nm, start, end, seq)
 
-    print 'Total oligos :', len(all_seqs)
+    print '\t', len(all_names), len(nms)
+
+    print '\tTotal oligos :', len(all_seqs)
     if len(all_seqs) == _config.d.MAX_OLIGOS:
-      print 'SUCCESS: Matches', _config.d.MAX_OLIGOS
+      print '\tSUCCESS: Matches', _config.d.MAX_OLIGOS
     else:
-      print 'WARNING: Fails to match', _config.d.MAX_OLIGOS
-      print 'WARNING: Difference is ', _config.d.MAX_OLIGOS - len(all_seqs)
+      print '\tWARNING: Fails to match', _config.d.MAX_OLIGOS
+      print '\tWARNING: Difference is ', _config.d.MAX_OLIGOS - len(all_seqs)
 
     out_fn = out_dir + nm + '_library.csv'
     with open(out_fn, 'w') as f:
-      pass
+      for i in range(len(all_names)):
+        f.write(all_names[i] + ',' + all_seqs[i] + '\n')
 
   return
 
